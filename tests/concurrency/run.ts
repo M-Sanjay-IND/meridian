@@ -27,18 +27,23 @@ async function disableConstraint() {
 
 async function restoreConstraint() {
   console.log("[HARNESS] Restoring database exclusion constraint no_host_overlap with resourcesNeeded = 1 predicate...");
-  await prisma.$executeRawUnsafe(`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'no_host_overlap'
-      ) THEN
-        ALTER TABLE "Booking" ADD CONSTRAINT "no_host_overlap"
-          EXCLUDE USING gist ("hostId" WITH =, "time_range" WITH &&)
-          WHERE ("status" <> 'CANCELLED' AND "resourcesNeeded" = 1);
-      END IF;
-    END $$;
-  `);
+  try {
+    await prisma.$executeRawUnsafe(`CREATE EXTENSION IF NOT EXISTS btree_gist;`);
+    await prisma.$executeRawUnsafe(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'no_host_overlap'
+        ) THEN
+          ALTER TABLE "Booking" ADD CONSTRAINT "no_host_overlap"
+            EXCLUDE USING gist ("hostId" WITH =, "time_range" WITH &&)
+            WHERE ("status" <> 'CANCELLED' AND "resourcesNeeded" = 1);
+        END IF;
+      END $$;
+    `);
+  } catch (err: any) {
+    console.log(`[HARNESS] Notice on restoring constraint: ${err.message}`);
+  }
 }
 
 async function main() {

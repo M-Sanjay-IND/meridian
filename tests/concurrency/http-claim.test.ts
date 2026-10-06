@@ -47,18 +47,22 @@ describe('HTTP Concurrency: Atomic Claim via POST /api/bookings', () => {
 
   afterAll(async () => {
     // Restore exclusion constraint
-    await prisma.$executeRawUnsafe(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_constraint WHERE conname = 'no_host_overlap'
-        ) THEN
-          ALTER TABLE "Booking" ADD CONSTRAINT "no_host_overlap"
-            EXCLUDE USING gist ("hostId" WITH =, "time_range" WITH &&)
-            WHERE ("status" <> 'CANCELLED' AND "resourcesNeeded" = 1);
-        END IF;
-      END $$;
-    `);
+    try {
+      await prisma.$executeRawUnsafe(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'no_host_overlap'
+          ) THEN
+            ALTER TABLE "Booking" ADD CONSTRAINT "no_host_overlap"
+              EXCLUDE USING gist ("hostId" WITH =, "time_range" WITH &&)
+              WHERE ("status" <> 'CANCELLED' AND "resourcesNeeded" = 1);
+          END IF;
+        END $$;
+      `);
+    } catch {
+      // Ignored if btree_gist or time_range tsrange column is absent
+    }
 
     await prisma.booking.deleteMany({
       where: {

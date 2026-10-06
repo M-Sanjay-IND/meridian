@@ -56,6 +56,8 @@ interface FacultyUnit {
   moreWindows: number;
 }
 
+const API_BASE = (import.meta.env.VITE_API_URL as string) || '';
+
 const LABS_DATA: LabUnit[] = [
   {
     id: 'LAB-01',
@@ -297,7 +299,7 @@ export function App() {
 
   // Fetch health on mount
   useEffect(() => {
-    fetch('/api/health')
+    fetch(`${API_BASE}/api/health`)
       .then(res => res.json())
       .then(data => setEngineHealth(data))
       .catch(() => {});
@@ -311,7 +313,7 @@ export function App() {
     setSelectedSlot(null);
     setBookingStatus(null);
 
-    fetch(`/api/slots?hostId=${selectedHostId}&serviceId=${serviceId}&from=${date}&to=${date}&tz=${encodeURIComponent(tz)}&studentId=${studentId}`)
+    fetch(`${API_BASE}/api/slots?hostId=${selectedHostId}&serviceId=${serviceId}&from=${date}&to=${date}&tz=${encodeURIComponent(tz)}&studentId=${studentId}`)
       .then(res => res.json())
       .then(data => {
         if (data.slots && Array.isArray(data.slots)) {
@@ -348,7 +350,7 @@ export function App() {
     setBookingStatus({ type: 'info', text: 'Arbitrating temporal lock & submitting atomic claim...' });
 
     try {
-      const res = await fetch('/api/bookings', {
+      const res = await fetch(`${API_BASE}/api/bookings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -378,7 +380,7 @@ export function App() {
           text: `Slot Claim Validated! Booking #${data.id} confirmed. Cancellation Token: ${data.cancellationToken}`,
         });
         // Refresh slot grid
-        fetch(`/api/slots?hostId=${selectedHostId}&serviceId=${serviceId}&from=${date}&to=${date}&tz=${encodeURIComponent(tz)}&studentId=${studentId}`)
+        fetch(`${API_BASE}/api/slots?hostId=${selectedHostId}&serviceId=${serviceId}&from=${date}&to=${date}&tz=${encodeURIComponent(tz)}&studentId=${studentId}`)
           .then(r => r.json())
           .then(d => d.slots && setSlots(d.slots));
       } else if (res.status === 409) {
@@ -681,7 +683,7 @@ export function App() {
                           onClick={async () => {
                             if (!confirm(`Cancel booking #${b.id}?`)) return;
                             try {
-                              const r = await fetch(`/api/bookings/${b.id}`, {
+                              const r = await fetch(`${API_BASE}/api/bookings/${b.id}`, {
                                 method: 'DELETE',
                                 headers: { 'Authorization': `Bearer ${b.cancellationToken}` },
                               });
