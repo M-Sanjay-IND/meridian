@@ -4,11 +4,9 @@
 
 | | |
 |---|---|
-| **Team ID** | `<FILL: TEAM-ID>` |
+| **Team ID** | `DBG-498` |
 | **Repo** | https://github.com/M-Sanjay-IND/meridian |
-| **Members** | Vijval Parakkat · M. Sanjay · `<FILL: teammates>` |
-
-> **Before you submit:** replace `<FILL: …>` above. An unfilled token reads as unfinished work.
+| **Members** | Vijval Parakkat · M. Sanjay · Viraj Singh Bhadouria |
 
 ## The card
 
