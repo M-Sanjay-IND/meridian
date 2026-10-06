@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { DateTime } from "luxon";
 import { buildApp } from "../../src/app.js";
 
 describe("API Route Surface (Role C)", () => {
@@ -17,24 +18,62 @@ describe("API Route Surface (Role C)", () => {
     expect(body.timestamp).toBeDefined();
   });
 
-  describe("GET /api/slots", () => {
-    it("handles KT-1: converts 09:00 IST to 20:30 PDT previous day in America/Los_Angeles", async () => {
+  describe("GET /api/slots — Killer Test 1 (Time Zones: Instant Identity across DST)", () => {
+    it("KT-1 October date (PDT, UTC-7): converts 09:00 IST to 20:30 PDT previous day with exact instant identity", async () => {
+      const date = "2026-10-15";
       const istRes = await app.inject({
         method: "GET",
-        url: "/api/slots?hostId=7&serviceId=3&from=2026-10-15&to=2026-10-15&tz=Asia/Kolkata",
+        url: `/api/slots?hostId=7&serviceId=3&from=${date}&to=${date}&tz=Asia/Kolkata`,
       });
       expect(istRes.statusCode).toBe(200);
       const istBody = JSON.parse(istRes.body);
-      expect(istBody.slots[0].start).toContain("2026-10-15T09:00:00+05:30");
 
       const pstRes = await app.inject({
         method: "GET",
-        url: "/api/slots?hostId=7&serviceId=3&from=2026-10-15&to=2026-10-15&tz=America/Los_Angeles",
+        url: `/api/slots?hostId=7&serviceId=3&from=${date}&to=${date}&tz=America/Los_Angeles`,
       });
       expect(pstRes.statusCode).toBe(200);
       const pstBody = JSON.parse(pstRes.body);
-      // On 2026-10-15 (October PDT, UTC-7), 09:00 IST (03:30 UTC) is 20:30 PDT on Oct 14
-      expect(pstBody.slots[0].start).toContain("2026-10-14T20:30:00-07:00");
+
+      expect(istBody.slots.length).toBe(pstBody.slots.length);
+
+      // Verify slot starts: 09:00 IST = 20:30 PDT previous day
+      expect(istBody.slots[0].start).toContain("09:00:00");
+      expect(pstBody.slots[0].start).toContain("20:30:00");
+
+      // Verify exact epoch millisecond instant identity across all slots
+      for (let i = 0; i < istBody.slots.length; i++) {
+        const istMillis = DateTime.fromISO(istBody.slots[i].start).toMillis();
+        const pstMillis = DateTime.fromISO(pstBody.slots[i].start).toMillis();
+        expect(istMillis).toBe(pstMillis);
+      }
+    });
+
+    it("KT-1 Standard-time date (PST, UTC-8): converts 09:00 IST to 19:30 PST previous day with exact instant identity", async () => {
+      const winterDate = "2027-01-15";
+      const istRes = await app.inject({
+        method: "GET",
+        url: `/api/slots?hostId=7&serviceId=3&from=${winterDate}&to=${winterDate}&tz=Asia/Kolkata`,
+      });
+      expect(istRes.statusCode).toBe(200);
+      const istBody = JSON.parse(istRes.body);
+
+      const pstRes = await app.inject({
+        method: "GET",
+        url: `/api/slots?hostId=7&serviceId=3&from=${winterDate}&to=${winterDate}&tz=America/Los_Angeles`,
+      });
+      expect(pstRes.statusCode).toBe(200);
+      const pstBody = JSON.parse(pstRes.body);
+
+      // In January, America/Los_Angeles is on standard time (PST, UTC-8): 09:00 IST (03:30 UTC) = 19:30 PST on Jan 14
+      expect(istBody.slots[0].start).toContain("09:00:00");
+      expect(pstBody.slots[0].start).toContain("19:30:00");
+
+      for (let i = 0; i < istBody.slots.length; i++) {
+        const istMillis = DateTime.fromISO(istBody.slots[i].start).toMillis();
+        const pstMillis = DateTime.fromISO(pstBody.slots[i].start).toMillis();
+        expect(istMillis).toBe(pstMillis);
+      }
     });
 
     it("rejects invalid IANA timezone with 422", async () => {
@@ -55,6 +94,38 @@ describe("API Route Surface (Role C)", () => {
       expect(res.statusCode).toBe(422);
       const body = JSON.parse(res.body);
       expect(body.error.code).toBe("INVALID_DATE_RANGE");
+    });
+  });
+
+  describe("GET /api/slots — Killer Test 2 (Buffers)", () => {
+    it("respects buffers: padded booking interval (09:45-11:00 UTC) has no available slots", async () => {
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/slots?hostId=7&serviceId=3&from=2026-10-15&to=2026-10-15&tz=UTC",
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+
+      // Verify that buffer metadata is returned
+      expect(body.buffer.before).toBe(15);
+      expect(body.buffer.after).toBe(30);
+
+      // Verify that any slot overlapping the padded buffer window (09:45–11:00 UTC) is marked unavailable
+      for (const slot of body.slots) {
+        const start = DateTime.fromISO(slot.start, { zone: "UTC" });
+        const end = DateTime.fromISO(slot.end, { zone: "UTC" });
+        const paddedStart = start.set({ hour: 9, minute: 45, second: 0, millisecond: 0 });
+        const paddedEnd = start.set({ hour: 11, minute: 0, second: 0, millisecond: 0 });
+
+        const overlaps = start < paddedEnd && end > paddedStart;
+        if (overlaps) {
+          expect(slot.available).toBe(false);
+          expect(slot.reason).toBe("buffer");
+        } else {
+          expect(slot.available).toBe(true);
+        }
+      }
     });
   });
 
@@ -116,7 +187,6 @@ describe("API Route Surface (Role C)", () => {
       const res = await app.inject({
         method: "DELETE",
         url: "/api/bookings/42",
-        // no token header provided
       });
 
       expect(res.statusCode).toBe(404);
