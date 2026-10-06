@@ -5,6 +5,7 @@ import { slotRoutes } from "./routes/slots.js";
 import { bookingRoutes } from "./routes/bookings.js";
 import { holdRoutes } from "./routes/holds.js";
 import { metaRoutes } from "./routes/meta.js";
+import { intelRoutes } from "./routes/intel.js";
 
 export function buildApp() {
   const app = fastify({
@@ -37,6 +38,7 @@ export function buildApp() {
   app.register(bookingRoutes, { prefix: "/api" });
   app.register(holdRoutes, { prefix: "/api" });
   app.register(metaRoutes, { prefix: "/api" });
+  app.register(intelRoutes, { prefix: "/api" });
 
   return app;
 }
