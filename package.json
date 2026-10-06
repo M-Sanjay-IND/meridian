@@ -1,0 +1,37 @@
+{
+  "name": "meridian",
+  "version": "1.0.0",
+  "description": "A campus scheduling engine for faculty office hours and lab slots",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "tsx prisma/seed.ts",
+    "test": "vitest run",
+    "test:killer": "vitest run tests/killer-tests",
+    "test:concurrency": "tsx tests/concurrency/run.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^9.0.1",
+    "@prisma/client": "^5.20.0",
+    "dotenv": "^16.4.5",
+    "fastify": "^4.28.1",
+    "luxon": "^3.5.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/luxon": "^3.4.2",
+    "@types/node": "^22.7.4",
+    "prisma": "^5.20.0",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

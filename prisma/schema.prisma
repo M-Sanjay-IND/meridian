@@ -1,0 +1,194 @@
+// ---------------------------------------------------------------------------
+// Meridian — Prisma Schema
+// Transcribed verbatim from docs/DATA_MODEL.md §2
+// ---------------------------------------------------------------------------
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------- enums
+enum Role {
+  STUDENT
+  FACULTY
+  ADMIN
+}
+
+enum AvailabilityKind {
+  WEEKLY
+  DATE
+  HOLIDAY
+}
+
+enum ResourceKind {
+  LAB
+  ROOM
+}
+
+enum BookingStatus {
+  RESERVED
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+// ---------------------------------------------------------------- people & places
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  name      String
+  role      Role     @default(STUDENT)
+  timeZone  String   @default("Asia/Kolkata") // IANA name, never an offset
+  createdAt DateTime @default(now())
+
+  availability   AvailabilityRule[]  @relation("OwnerUser")
+  hosted         ServiceType[]       @relation("Host")
+  bookings       Booking[]           @relation("StudentBookings")
+  commitments    StudentCommitment[]
+  holds          Hold[]
+  ownedResources Resource[]          @relation("ResourceOwner")
+
+  @@index([role])
+}
+
+model Resource {
+  id       Int          @id @default(autoincrement())
+  name     String
+  kind     ResourceKind @default(LAB)
+  capacity Int          @default(1) // stations; the KT-3b dimension
+  ownerId  Int?
+  owner    User?        @relation("ResourceOwner", fields: [ownerId], references: [id])
+  timeZone String       @default("Asia/Kolkata")
+  active   Boolean      @default(true)
+
+  availability AvailabilityRule[] @relation("OwnerResource")
+  services     ServiceType[]      @relation("ServiceResource")
+  bookings     Booking[]          @relation("BookingResource")
+
+  @@index([kind, active])
+}
+
+// ---------------------------------------------------------------- term calendar
+model Term {
+  id       Int      @id @default(autoincrement())
+  name     String
+  startsOn DateTime @db.Date
+  endsOn   DateTime @db.Date
+  timeZone String   @default("Asia/Kolkata")
+
+  @@index([startsOn, endsOn])
+}
+
+/// ONE table models recurring hours, one-off date overrides AND term holidays.
+/// This mirrors the original's dual-row design (packages/features/schedules/lib/date-ranges.ts:11-12)
+/// but makes the kind explicit instead of inferring it from which column is non-null.
+model AvailabilityRule {
+  id              Int              @id @default(autoincrement())
+  kind            AvailabilityKind
+  ownerUserId     Int?
+  ownerUser       User?            @relation("OwnerUser", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  ownerResourceId Int?
+  ownerResource   Resource?        @relation("OwnerResource", fields: [ownerResourceId], references: [id], onDelete: Cascade)
+  termId          Int?
+  days            Int[] // WEEKLY only: 0=Sun..6=Sat, matching JS getDay()
+  date            DateTime?        @db.Date // DATE and HOLIDAY only
+  startTime       DateTime         @db.Time // database TIME, not a timestamp
+  endTime         DateTime         @db.Time
+  note            String?
+
+  @@index([ownerUserId, kind])
+  @@index([ownerResourceId, kind])
+  @@index([date])
+}
+
+// ---------------------------------------------------------------- what can be booked
+model ServiceType {
+  id            Int       @id @default(autoincrement())
+  name          String // "Office hours", "Lab B — Tue session"
+  durationMins  Int       @default(30)
+  beforeBuffer  Int       @default(0) // minutes; see ARCHITECTURE.md stage 5
+  afterBuffer   Int       @default(0)
+  minNoticeMins Int       @default(0)
+  seatsPerSlot  Int       @default(1) // 1 for a person; = resource capacity for a lab
+  hostId        Int?
+  host          User?     @relation("Host", fields: [hostId], references: [id])
+  resourceId    Int?
+  resource      Resource? @relation("ServiceResource", fields: [resourceId], references: [id])
+  active        Boolean   @default(true)
+
+  bookings Booking[]
+
+  @@index([hostId, active])
+  @@index([resourceId, active])
+}
+
+// ---------------------------------------------------------------- the bookings
+model Booking {
+  id              Int           @id @default(autoincrement())
+  serviceTypeId   Int
+  serviceType     ServiceType   @relation(fields: [serviceTypeId], references: [id])
+  hostId          Int? // denormalised for the constraint
+  resourceId      Int? // denormalised for the constraint
+  resource        Resource?     @relation("BookingResource", fields: [resourceId], references: [id])
+  studentId       Int
+  student         User          @relation("StudentBookings", fields: [studentId], references: [id])
+  slotStart       DateTime      @db.Timestamptz
+  slotEnd         DateTime      @db.Timestamptz
+  status          BookingStatus @default(RESERVED)
+  resourcesNeeded Int           @default(1) // the constraint's predicate key
+  idempotencyKey  String?       @unique
+  note            String?
+  createdAt       DateTime      @default(now())
+  cancelledAt     DateTime?
+
+  @@index([hostId, slotStart])
+  @@index([resourceId, slotStart])
+  @@index([studentId, slotStart])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------- the student's timetable — D3
+model StudentCommitment {
+  id        Int      @id @default(autoincrement())
+  studentId Int
+  student   User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  label     String // "CS3011 lecture"
+  slotStart DateTime @db.Timestamptz
+  slotEnd   DateTime @db.Timestamptz
+  source    String   @default("manual") // manual | ics-import
+
+  @@index([studentId, slotStart])
+}
+
+// ---------------------------------------------------------------- holds
+model Hold {
+  id         Int      @id @default(autoincrement())
+  hostId     Int?
+  resourceId Int?
+  studentId  Int
+  student    User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  slotStart  DateTime @db.Timestamptz
+  slotEnd    DateTime @db.Timestamptz
+  expiresAt  DateTime @db.Timestamptz
+
+  @@unique([studentId, slotStart, slotEnd])
+  @@index([expiresAt])
+}
+
+// ---------------------------------------------------------------- allocation — D2
+model Allocation {
+  id         Int      @id @default(autoincrement())
+  termId     Int
+  studentId  Int
+  bookingId  Int?     @unique
+  policy     String // round-robin-week | by-request-time | spread-by-day
+  assignedAt DateTime @default(now())
+
+  @@index([termId, policy])
+}
