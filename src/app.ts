@@ -1,6 +1,10 @@
 import fastify from "fastify";
 import cors from "@fastify/cors";
 import { healthRoutes } from "./routes/health.js";
+import { slotRoutes } from "./routes/slots.js";
+import { bookingRoutes } from "./routes/bookings.js";
+import { holdRoutes } from "./routes/holds.js";
+import { metaRoutes } from "./routes/meta.js";
 
 export function buildApp() {
   const app = fastify({
@@ -29,6 +33,10 @@ export function buildApp() {
 
   // Register route groups under /api
   app.register(healthRoutes, { prefix: "/api" });
+  app.register(slotRoutes, { prefix: "/api" });
+  app.register(bookingRoutes, { prefix: "/api" });
+  app.register(holdRoutes, { prefix: "/api" });
+  app.register(metaRoutes, { prefix: "/api" });
 
   return app;
 }
