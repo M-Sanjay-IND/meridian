@@ -2,7 +2,6 @@ import fastify from "fastify";
 import cors from "@fastify/cors";
 import path from "node:path";
 import fs from "node:fs";
-import fastifyStatic from "@fastify/static";
 import { healthRoutes } from "./routes/health.js";
 import { slotRoutes } from "./routes/slots.js";
 import { bookingRoutes } from "./routes/bookings.js";
@@ -43,13 +42,18 @@ export function buildApp() {
   app.register(metaRoutes, { prefix: "/api" });
   app.register(intelRoutes, { prefix: "/api" });
 
-  // Serve compiled React frontend if web/dist exists
+  // Serve compiled React frontend if web/dist exists and static plugin is available
   const webDistPath = path.resolve(process.cwd(), "web/dist");
   if (fs.existsSync(webDistPath)) {
-    app.register(fastifyStatic, {
-      root: webDistPath,
-      prefix: "/",
-    });
+    const staticPluginPkg = "@fastify/static";
+    import(staticPluginPkg)
+      .then((fastifyStatic: any) => {
+        app.register(fastifyStatic.default || fastifyStatic, {
+          root: webDistPath,
+          prefix: "/",
+        });
+      })
+      .catch(() => {});
   }
 
   return app;
