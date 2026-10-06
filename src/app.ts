@@ -1,5 +1,8 @@
 import fastify from "fastify";
 import cors from "@fastify/cors";
+import path from "node:path";
+import fs from "node:fs";
+import fastifyStatic from "@fastify/static";
 import { healthRoutes } from "./routes/health.js";
 import { slotRoutes } from "./routes/slots.js";
 import { bookingRoutes } from "./routes/bookings.js";
@@ -39,6 +42,15 @@ export function buildApp() {
   app.register(holdRoutes, { prefix: "/api" });
   app.register(metaRoutes, { prefix: "/api" });
   app.register(intelRoutes, { prefix: "/api" });
+
+  // Serve compiled React frontend if web/dist exists
+  const webDistPath = path.resolve(process.cwd(), "web/dist");
+  if (fs.existsSync(webDistPath)) {
+    app.register(fastifyStatic, {
+      root: webDistPath,
+      prefix: "/",
+    });
+  }
 
   return app;
 }
