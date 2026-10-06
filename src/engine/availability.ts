@@ -325,6 +325,9 @@ export async function getSlots(input: GetSlotsInput, db: Db): Promise<GetSlotsRe
           available = false;
           remaining = 0;
           reason = overlappingHolds.length > 0 ? "hold" : "booked";
+        } else if (totalBusy > 0) {
+          available = true;
+          remaining = capacity - totalBusy;
         } else {
           const overlapsInflated = inflatedBusy.some(
             (b) => b.start.getTime() < slotEnd.getTime() && b.end.getTime() > slotStart.getTime()
@@ -336,7 +339,7 @@ export async function getSlots(input: GetSlotsInput, db: Db): Promise<GetSlotsRe
             reason = "buffer";
           } else {
             available = true;
-            remaining = capacity - totalBusy;
+            remaining = capacity;
           }
         }
       }

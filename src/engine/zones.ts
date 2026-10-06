@@ -107,7 +107,11 @@ export function parseTimeInZone(
   let second = 0;
 
   if (typeof timeVal === "string") {
-    const segments = timeVal.split(":");
+    let clean = timeVal;
+    if (clean.includes("T")) {
+      clean = clean.split("T")[1];
+    }
+    const segments = clean.split(":");
     hour = parseInt(segments[0], 10);
     minute = parseInt(segments[1], 10);
     second = segments[2] ? parseInt(segments[2], 10) : 0;
