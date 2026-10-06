@@ -230,7 +230,7 @@ describe("API Route Surface (Role C)", () => {
     });
   });
 
-  describe("GET /api/intel/clashes (D3 Sentinel)", () => {
+  describe("D3 Clash Sentinel (Invitee Timetable Conflict Awareness)", () => {
     it("returns student timetable commitments for studentId", async () => {
       const res = await app.inject({
         method: "GET",
@@ -242,6 +242,43 @@ describe("API Route Surface (Role C)", () => {
       expect(body.studentId).toBe(42);
       expect(Array.isArray(body.commitments)).toBe(true);
       expect(body.commitments.length).toBeGreaterThan(0);
+    });
+
+    it("marks slots that conflict with student commitments as unavailable with reason 'clash'", async () => {
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/slots?hostId=7&serviceId=3&from=2026-10-15&to=2026-10-15&tz=Asia/Kolkata&studentId=42",
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+
+      // Student 42 has CS3011 lecture from 10:00 to 11:30 IST
+      const clashingSlots = body.slots.filter((s: any) => s.reason === "clash");
+      expect(clashingSlots.length).toBeGreaterThan(0);
+      for (const cs of clashingSlots) {
+        expect(cs.available).toBe(false);
+      }
+    });
+
+    it("rejects booking attempt during student's existing commitment with 409 student_clash", async () => {
+      // Clashes with CS3011 Operating Systems Lecture (10:00-11:30 IST -> 04:30-06:00 UTC)
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/bookings",
+        payload: {
+          serviceId: 3,
+          hostId: 7,
+          studentId: 42,
+          start: "2026-10-15T04:30:00Z",
+          end: "2026-10-15T05:15:00Z",
+        },
+      });
+
+      expect(res.statusCode).toBe(409);
+      const body = JSON.parse(res.body);
+      expect(body.error.code).toBe("student_clash");
+      expect(body.error.message).toContain("CS3011");
     });
   });
 });

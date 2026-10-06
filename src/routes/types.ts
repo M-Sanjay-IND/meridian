@@ -19,6 +19,7 @@ export const GetSlotsQuerySchema = z.object({
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "from must be YYYY-MM-DD"),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "to must be YYYY-MM-DD"),
   tz: z.string().min(1, "tz is required"),
+  studentId: z.coerce.number().int().positive().optional(),
 }).refine(
   (data) => (data.hostId !== undefined && data.resourceId === undefined) || (data.hostId === undefined && data.resourceId !== undefined),
   { message: "Must provide exactly one of hostId or resourceId" }

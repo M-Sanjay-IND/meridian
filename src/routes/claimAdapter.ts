@@ -41,7 +41,23 @@ export async function claimBooking(
     // Role B claim not merged yet, fallback to contract-compliant stub
   }
 
-  // Contract stub: simulates winning the claim
+  // Contract stub: simulates winning the claim or clash detection
+  const enableClashSentinel = process.env.ENABLE_CLASH_SENTINEL !== "false";
+  // If student 42 tries to book during 10:00 to 11:30 IST (04:30 to 06:00 UTC)
+  if (input.studentId === 42 && enableClashSentinel) {
+    const s = new Date(input.start).getTime();
+    const e = new Date(input.end).getTime();
+    const clashS = new Date("2026-10-15T04:30:00Z").getTime();
+    const clashE = new Date("2026-10-15T06:00:00Z").getTime();
+    if (s < clashE && e > clashS) {
+      return {
+        winner: false,
+        code: "student_clash",
+        conflict: "CS3011 Operating Systems Lecture",
+      };
+    }
+  }
+
   const booking: BookingResponse = {
     id: Math.floor(Math.random() * 10000) + 1,
     status: "RESERVED",

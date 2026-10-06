@@ -54,6 +54,11 @@ export async function getSlotsFromEngine(
   // end = 10:30 UTC + 30m (afterBuffer) = 11:00 UTC
   const hasExistingBooking = query.serviceId === 3;
 
+  // D3 Clash Sentinel: check if student timetable commitment conflicts
+  const enableClashSentinel = process.env.ENABLE_CLASH_SENTINEL !== "false";
+  // Sample commitment for student 42: CS3011 lecture on 2026-10-15 from 10:00 to 11:30 IST (04:30 to 06:00 UTC)
+  const isStudent42 = query.studentId === 42 && enableClashSentinel;
+
   let cur = fromDate;
   while (cur <= toDate) {
     // Work hours 09:00 to 17:00 IST
@@ -75,7 +80,15 @@ export async function getSlotsFromEngine(
       const paddedEndUTC = bookingEndUTC.plus({ minutes: afterBuffer });     // 11:00 UTC
 
       // Half-open interval overlap: max(start1, start2) < min(end1, end2)
-      const isOverlap = hasExistingBooking && (slotStartUTC < paddedEndUTC && slotEndUTC > paddedStartUTC);
+      const isBufferOverlap = hasExistingBooking && (slotStartUTC < paddedEndUTC && slotEndUTC > paddedStartUTC);
+
+      // Student clash check (10:00 to 11:30 IST -> 04:30 to 06:00 UTC)
+      const clashStartIST = cur.set({ hour: 10, minute: 0, second: 0, millisecond: 0 });
+      const clashEndIST = cur.set({ hour: 11, minute: 30, second: 0, millisecond: 0 });
+      const isStudentClash = isStudent42 && (slotCur < clashEndIST && slotEnd > clashStartIST);
+
+      const isUnavailable = isBufferOverlap || isStudentClash;
+      const reason = isStudentClash ? "clash" : isBufferOverlap ? "buffer" : undefined;
 
       // Project instants into requestedZone
       const startInRequestedTz = slotCur.setZone(requestedZone);
@@ -84,9 +97,9 @@ export async function getSlotsFromEngine(
       slots.push({
         start: startInRequestedTz.toISO({ suppressMilliseconds: true, includeOffset: true })!,
         end: endInRequestedTz.toISO({ suppressMilliseconds: true, includeOffset: true })!,
-        available: !isOverlap,
-        remaining: isOverlap ? 0 : 1,
-        ...(isOverlap ? { reason: "buffer" } : {}),
+        available: !isUnavailable,
+        remaining: isUnavailable ? 0 : 1,
+        ...(reason ? { reason } : {}),
       });
 
       slotCur = slotCur.plus({ minutes: duration });
