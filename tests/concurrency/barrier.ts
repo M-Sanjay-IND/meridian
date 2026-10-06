@@ -1,6 +1,7 @@
 /**
  * Synchronization barrier for concurrent execution.
  * Releases all N participants simultaneously when the count is reached.
+ * Owned by: DEV D (Verification)
  */
 export class Barrier {
   private count: number;
