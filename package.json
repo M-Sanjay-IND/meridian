@@ -9,10 +9,10 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "start": "node dist/server.js",
-    "db:migrate": "prisma migrate dev",
+    "db:migrate": "prisma migrate deploy && prisma generate",
     "db:seed": "tsx prisma/seed.ts",
     "test": "vitest run",
-    "test:killer": "vitest run tests/killer-tests",
+    "test:killer": "tsx tests/killer-tests/runner.ts",
     "test:concurrency": "tsx tests/concurrency/run.ts"
   },
   "dependencies": {
